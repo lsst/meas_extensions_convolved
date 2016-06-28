@@ -7,3 +7,8 @@
 .sconsign.dblite
 config.log
 doc/htmlDir
+python/lsst/meas/extensions/convolved/convolvedLib.py
+python/lsst/meas/extensions/convolved/convolvedLib_wrap.cc
+tests/.tests
+ups/*.cfgc
+python/lsst/meas/extensions/convolved/version.py
