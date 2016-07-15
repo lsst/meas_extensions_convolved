@@ -38,7 +38,7 @@ Interface to convolved magnitudes
 #include "lsst/afw/image/Utils.h"
 #include "lsst/afw/geom/Point.h"
 #include "lsst/meas/algorithms.h"
-#include "lsst/meas/extensions/convolved/convolved.h"
+#include "lsst/meas/extensions/convolved.h"
 %}
 
 %include "lsst/p_lsstSwig.i"
@@ -48,4 +48,4 @@ Interface to convolved magnitudes
 
 %shared_ptr(lsst::meas::extensions::convolved::ConvolvedFluxControl);
 
-%include "lsst/meas/extensions/convolved/convolved.h"
+%include "lsst/meas/extensions/convolved.h"

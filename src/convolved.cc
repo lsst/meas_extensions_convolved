@@ -18,7 +18,7 @@
 #include "lsst/meas/algorithms/Photometry.h"
 #include "lsst/meas/extensions/photometryKron.h"
 
-#include "lsst/meas/extensions/convolved/convolved.h"
+#include "lsst/meas/extensions/convolved.h"
 
 namespace lsst {
 namespace meas {
