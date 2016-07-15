@@ -22,7 +22,9 @@ public:
         seeing.push_back(3.5);
         seeing.push_back(5.0);
         seeing.push_back(6.5);
-        radius.push_back(6.5);  // for 1.1 arcsec diameter, corresponding to PFS fiber size
+        radius.push_back(3.3);  // for 1.1 arcsec diameter, corresponding to PFS fiber size
+        radius.push_back(4.5);  // 1.5 arcsec diameter for HSC
+        radius.push_back(6.0);  // 2.0 arcsec diameter for HSC
     }
 
 private:
