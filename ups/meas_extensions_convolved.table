@@ -1,4 +1,5 @@
 setupRequired(meas_algorithms)
+setupRequired(meas_extensions_photometryKron)
 
 envPrepend(LD_LIBRARY_PATH, ${PRODUCT_DIR}/lib)
 envAppend(DYLD_LIBRARY_PATH, ${PRODUCT_DIR}/lib)
