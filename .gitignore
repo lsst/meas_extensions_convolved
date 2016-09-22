@@ -12,3 +12,4 @@ python/lsst/meas/extensions/convolved/convolvedLib_wrap.cc
 tests/.tests
 ups/*.cfgc
 python/lsst/meas/extensions/convolved/version.py
+.cache
