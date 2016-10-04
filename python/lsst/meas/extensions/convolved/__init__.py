@@ -1,6 +1,6 @@
 # 
 # LSST Data Management System
-# Copyright 2008, 2009, 2010 LSST Corporation.
+# Copyright 2008-2016 LSST Corporation.
 # 
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,9 +20,5 @@
 # see <http://www.lsstcorp.org/LegalNotices/>.
 #
 
-from .convolvedLib import *
 from .version import *
-
-import lsst.meas.algorithms
-lsst.meas.algorithms.AlgorithmRegistry.register("flux.convolved", ConvolvedFluxControl)
-del lsst # cleanup namespace
+from .convolved import *
