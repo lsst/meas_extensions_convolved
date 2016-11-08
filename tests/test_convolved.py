@@ -6,6 +6,7 @@ import lsst.utils.tests
 import lsst.daf.base as dafBase
 import lsst.afw.detection as afwDetection
 import lsst.afw.geom as afwGeom
+import lsst.afw.geom.ellipses as afwEll
 import lsst.afw.table as afwTable
 import lsst.afw.coord as afwCoord
 import lsst.afw.image as afwImage
@@ -86,7 +87,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             self.assertIn(name + "_fluxSigma", schema)
             self.assertIn(name + "_flag", schema)
 
-    def check(self, psfFwhm=0.5, flux=1000.0):
+    def check(self, psfFwhm=0.5, flux=1000.0, forced=False):
         """Check that we can measure convolved fluxes
     
         We create an image with a Gaussian PSF and a single point source.
@@ -99,6 +100,8 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             PSF FWHM (arcsec)
         flux : `float`
             Source flux (ADU)
+        forced : `bool`
+            Forced measurement?
         """
         bbox = afwGeom.Box2I(afwGeom.Point2I(12345, 6789), afwGeom.Extent2I(200, 300))
 
@@ -107,28 +110,60 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         # not doing that here.
         scale = 0.1*afwGeom.arcseconds
 
+        TaskClass = measBase.ForcedMeasurementTask if forced else measBase.SingleFrameMeasurementTask
+
         exposure, center = makeExposure(bbox, scale, psfFwhm, flux)
-        msConfig = measBase.SingleFrameMeasurementConfig()
+        measConfig = TaskClass.ConfigClass()
         algName = "ext_convolved_ConvolvedFlux"
-        msConfig.plugins.names.add(algName)
-        msConfig.plugins.names.add("ext_photometryKron_KronFlux")
+        measConfig.plugins.names.add(algName)
+        if not forced:
+            measConfig.plugins.names.add("ext_photometryKron_KronFlux")
         values = [ii/scale.asArcseconds() for ii in (0.6, 0.8, 1.0, 1.2)]
-        algConfig = msConfig.algorithms[algName]
+        algConfig = measConfig.plugins[algName]
         algConfig.seeing = values
         algConfig.aperture.radii = values
         algConfig.aperture.maxSincRadius = max(values) + 1  # Get as exact as we can
 
-        schema = afwTable.SourceTable.makeMinimalSchema()
-        algMetadata = dafBase.PropertyList()
+        if forced:
+            offset = lsst.afw.geom.Extent2D(-12.3, 45.6)
+            kronRadiusName = "my_Kron_Radius"
+            kronRadius = 12.345
+            refWcs = exposure.getWcs().clone()
+            refWcs.shiftReferencePixel(offset)
+            measConfig.plugins[algName].kronRadiusName = kronRadiusName
+            refSchema = afwTable.SourceTable.makeMinimalSchema()
+            centroidKey = afwTable.Point2DKey.addFields(refSchema, "my_centroid", doc="centroid",
+                                                        unit="pixel")
+            shapeKey = afwTable.QuadrupoleKey.addFields(refSchema, "my_shape", "shape")
+            refSchema.getAliasMap().set("slot_Centroid", "my_centroid")
+            refSchema.getAliasMap().set("slot_Shape", "my_shape")
+            refSchema.addField("my_centroid_flag", type="Flag", doc="centroid flag")
+            refSchema.addField("my_shape_flag", type="Flag", doc="shape flag")
+            refSchema.addField(kronRadiusName, type=float, doc="my custom kron radius", units="pixel")
+            refCat = afwTable.SourceCatalog(refSchema)
+            refSource = refCat.addNew()
+            refSource.set(centroidKey, center + offset)
+            refSource.set(shapeKey, afwEll.Quadrupole(afwEll.Axes(kronRadius, kronRadius, 0)))
+            refSource.set(kronRadiusName, kronRadius)
+            refSource.setCoord(refWcs.pixelToSky(refSource.get(centroidKey)))
+            taskInitArgs = (refSchema,)
+            taskRunArgs = (refCat, refWcs)
+        else:
+            taskInitArgs = (afwTable.SourceTable.makeMinimalSchema(),)
+            taskRunArgs = ()
 
-        task = measBase.SingleFrameMeasurementTask(schema, config=msConfig, algMetadata=algMetadata)
+        algMetadata = dafBase.PropertyList()
+        task = TaskClass(*taskInitArgs, config=measConfig, algMetadata=algMetadata)
+
+        schema = task.schema
         measCat = afwTable.SourceCatalog(schema)
         source = measCat.addNew()
         source.getTable().setMetadata(algMetadata)
         ss = afwDetection.FootprintSet(exposure.getMaskedImage(), afwDetection.Threshold(0.1))
         fp = ss.getFootprints()[0]
         source.setFootprint(fp)
-        task.run(measCat, exposure)
+
+        task.run(measCat, exposure, *taskRunArgs)
 
         disp = afwDisplay.Display(frame)
         disp.mtv(exposure)
@@ -137,6 +172,9 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         self.checkSchema(schema, algConfig.getAllApertureResultNames())
         self.checkSchema(schema, algConfig.getAllKronResultNames())
         self.checkSchema(schema, algConfig.getAllResultNames())
+
+        if not forced:
+            kronRadius = source.get("ext_photometryKron_KronFlux_radius")
 
         self.assertFalse(source.get(algName + "_flag"))  # algorithm succeeded
         for ii, seeing in enumerate(algConfig.seeing):
@@ -151,23 +189,27 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
                 return flux*(1.0 - math.exp(-0.5*(radius/sigma)**2))
 
             # Kron succeeded and match expectation
-            kronName = algConfig.getKronResultName(seeing)
-            kronApRadius = algConfig.kronRadiusForFlux*source.get("ext_photometryKron_KronFlux_radius")
-            self.assertClose(source.get(kronName + "_flux"), expected(kronApRadius), rtol=1.0e-3)
-            self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
-            self.assertFalse(source.get(kronName + "_flag"))
+            if not forced:
+                kronName = algConfig.getKronResultName(seeing)
+                kronApRadius = algConfig.kronRadiusForFlux*kronRadius
+                self.assertClose(source.get(kronName + "_flux"), expected(kronApRadius), rtol=1.0e-3)
+                self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
+                self.assertFalse(source.get(kronName + "_flag"))
 
             # Aperture measurements suceeded and match expectation
-            for jj, radius in enumerate(msConfig.algorithms[algName].aperture.radii):
+            for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
                 name = algConfig.getApertureResultName(seeing, radius)
                 self.assertClose(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
                 self.assertFalse(source.get(name + "_flag"))
                 self.assertGreater(source.get(name + "_fluxSigma"), 0)
 
     def testConvolvedFlux(self):
-        self.check(psfFwhm=0.5) # Smaller than all target seeings
-        self.check(psfFwhm=0.9) # Larger than half the target seeings
-        self.check(psfFwhm=1.3) # Larger than all the target seeings
+        for forced in (True, False):
+            for psfFwhm in (0.5,  # Smaller than all target seeings
+                            0.9,  # Larger than half the target seeings
+                            1.3,  # Larger than all the target seeings
+                            ):
+                self.check(psfFwhm=psfFwhm, forced=forced)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
