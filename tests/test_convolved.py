@@ -177,12 +177,11 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             kronRadius = source.get("ext_photometryKron_KronFlux_radius")
 
         self.assertFalse(source.get(algName + "_flag"))  # algorithm succeeded
-        for ii, seeing in enumerate(algConfig.seeing):
-            deconvolve = seeing < psfFwhm/scale.asArcseconds()
-            self.assertTrue(source.get(algName + "_%d_deconv" % ii) == deconvolve)
-            if deconvolve:
-                # Not worth checking anything else
-                continue
+        originalSeeing = psfFwhm/scale.asArcseconds()
+        for ii, targetSeeing in enumerate(algConfig.seeing):
+            deconvolve = targetSeeing < originalSeeing
+            self.assertEqual(source.get(algName + "_%d_deconv" % ii), deconvolve)
+            seeing = originalSeeing if deconvolve else targetSeeing
 
             def expected(radius, sigma=seeing/SIGMA_TO_FWHM):
                 """Return expected flux for 2D Gaussian with nominated sigma"""
@@ -190,7 +189,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
 
             # Kron succeeded and match expectation
             if not forced:
-                kronName = algConfig.getKronResultName(seeing)
+                kronName = algConfig.getKronResultName(targetSeeing)
                 kronApRadius = algConfig.kronRadiusForFlux*kronRadius
                 self.assertClose(source.get(kronName + "_flux"), expected(kronApRadius), rtol=1.0e-3)
                 self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
@@ -198,7 +197,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
 
             # Aperture measurements suceeded and match expectation
             for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
-                name = algConfig.getApertureResultName(seeing, radius)
+                name = algConfig.getApertureResultName(targetSeeing, radius)
                 self.assertClose(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
                 self.assertFalse(source.get(name + "_flag"))
                 self.assertGreater(source.get(name + "_fluxSigma"), 0)
