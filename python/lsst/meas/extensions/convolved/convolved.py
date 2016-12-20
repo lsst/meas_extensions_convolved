@@ -321,8 +321,9 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
                 convolved = self.convolve(exposure, seeing, target/SIGMA_TO_FWHM, measRecord.getFootprint(),
                                           maxRadius)
             except (DeconvolutionError, RuntimeError):
+                # Record the problem, but allow the measurement to run in case it's useful
                 measRecord.set(self.data[ii].deconvKey, True)
-                continue
+                convolved = exposure
             self.measureAperture(measRecord, convolved, self.data[ii].aperture)
             if kron is not None:
                 self.measureForcedKron(measRecord, self.data[ii].kronKeys, convolved.getMaskedImage(), kron)
