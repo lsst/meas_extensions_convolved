@@ -23,17 +23,19 @@
 import math
 import numpy as np
 
-from lsst.pex.config import Field, ListField, ConfigField, makeConfigClass
+from lsst.pex.config import Config, Field, ListField, ConfigField, makeConfigClass
 from lsst.pipe.base import Struct
 from lsst.meas.extensions.photometryKron import KronAperture, KronFluxPlugin
 from lsst.meas.base.flagDecorator import addFlagHandler
+from lsst.meas.base.wrappers import WrappedSingleFramePlugin, WrappedForcedPlugin
 
 import lsst.meas.base
 import lsst.afw.math
 import lsst.afw.geom
 import lsst.afw.image
 
-__all__ = ("ConvolvedFluxConfig", "ConvolvedFluxPlugin")
+__all__ = ("SingleFrameConvolvedFluxPlugin", "SingleFrameConvolvedFluxConfig",
+           "ForcedConvolvedFluxPlugin", "ForcedConvolvedFluxConfig",)
 
 
 SIGMA_TO_FWHM = 2.0*math.sqrt(2.0*(math.log(2.0)))  # Multiply sigma by this to get FWHM
@@ -42,11 +44,6 @@ PLUGIN_NAME = "ext_convolved_ConvolvedFlux"  # Usual name for plugin
 
 class DeconvolutionError(RuntimeError):
     """Convolving to the target seeing would require deconvolution"""
-    pass
-
-
-class NoKronError(RuntimeError):
-    """There's no Kron radius available"""
     pass
 
 
@@ -69,7 +66,7 @@ class ConvolvedFluxData(Struct):
         for Kron measurement).
     """
 
-    def __init__(self, name, schema, seeing, config, metadata, doKron):
+    def __init__(self, name, schema, seeing, config, metadata):
         deconvKey = schema.addField(name + "_deconv", type="Flag",
                                     doc="deconvolution required for seeing %f; no measurement made" %
                                     (seeing,))
@@ -80,11 +77,11 @@ class ConvolvedFluxData(Struct):
                                                           doc="convolved Kron flux: seeing %f" % (seeing,)),
             flag = schema.addField(name + "_kron_flag", type="Flag",
                                    doc="convolved Kron flux failed: seeing %f" % (seeing,)),
-        ) if doKron else None
+        )
         Struct.__init__(self, deconvKey=deconvKey, aperture=aperture, kronKeys=kronKeys)
 
 
-class ConvolvedFluxConfig(lsst.meas.base.SingleFramePluginConfig):
+class BaseConvolvedFluxConfig(Config):
     # convolution
     seeing = ListField(dtype=float, default=[3.5, 5.0, 6.5], doc="list of target seeings (FWHM, pixels)")
     kernelScale = Field(dtype=float, default=4.0, doc="scaling factor of kernel sigma for kernel size")
@@ -98,7 +95,7 @@ class ConvolvedFluxConfig(lsst.meas.base.SingleFramePluginConfig):
     kronRadiusForFlux = Field(dtype=float, default=2.5, doc="Number of Kron radii for Kron flux")
 
     def setDefaults(self):
-        lsst.meas.base.SingleFramePluginConfig.setDefaults(self)
+        Config.setDefaults(self)
         # Don't need the full set of apertures because the larger ones aren't affected by the convolution
         self.aperture.radii = [3.3, 4.5, 6.0]
 
@@ -211,9 +208,8 @@ class ConvolvedFluxConfig(lsst.meas.base.SingleFramePluginConfig):
         return self.getAllApertureResultNames(name=name) + self.getAllKronResultNames(name=name)
 
 
-@lsst.meas.base.register(PLUGIN_NAME)
 @addFlagHandler(("flag", "error in running ConvolvedFluxPlugin"),)
-class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
+class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
     """Calculate aperture fluxes on images convolved to target seeing.
 
     This measurement plugin convolves the image to match a target seeing
@@ -238,8 +234,6 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
     there's a few more try/except blocks than might be otherwise expected.
     """
 
-    ConfigClass = ConvolvedFluxConfig
-
     @classmethod
     def getExecutionOrder(cls):
         return KronFluxPlugin.getExecutionOrder() + 0.1  # Should run after Kron because we need the radius
@@ -258,19 +252,12 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         metadata : `lsst.daf.base.PropertyList`
             Algorithm metadata to be recorded in the catalog header.
         """
-        lsst.meas.base.SingleFramePlugin.__init__(self, config, name, schema, metadata)
+        lsst.meas.base.BaseMeasurementPlugin.__init__(self, config, name)
         self.seeingKey = schema.addField(name + "_seeing", type="F",
                                          doc="original seeing (Gaussian sigma) at position",
                                          units="pixel")
-        try:
-            self.kronRadiusKey = schema.find(config.kronRadiusName).key
-        except:
-            self.haveKron = False
-        else:
-            self.haveKron = True
-
         self.data = [ConvolvedFluxData(self.config.getBaseNameForSeeing(seeing), schema, seeing,
-                                       self.config, metadata, self.haveKron) for seeing in self.config.seeing]
+                                       self.config, metadata) for seeing in self.config.seeing]
 
         # Trigger aperture corrections for all flux measurements
         for apName in self.config.getAllApertureResultNames(name):
@@ -290,14 +277,45 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         exposure : `lsst.afw.image.Exposure`
             Image to be measured.
         """
+        return self.measureForced(measRecord, exposure, measRecord, None)
+
+    def measureForced(self, measRecord, exposure, refRecord, refWcs):
+        """Measure source on image in forced mode
+
+        Parameters
+        ----------
+        measRecord : `lsst.afw.table.SourceRecord`
+            Record for source to be measured.
+        exposure : `lsst.afw.image.Exposure`
+            Image to be measured.
+        refRecord : `lsst.afw.table.SourceRecord`
+            Record providing reference position and aperture.
+        refWcs : `lsst.afw.image.Wcs` or `None`
+            Astrometric solution for reference, or `None` for no conversion
+            from reference to measurement frame.
+        """
         psf = exposure.getPsf()
         if psf is None:
             raise lsst.meas.base.MeasurementError("No PSF in exposure")
-        center = self.centroidExtractor(measRecord, self.flagHandler)
+
+        refCenter = self.centroidExtractor(refRecord, self.flagHandler)
+
+        if refWcs is not None:
+            measWcs = exposure.getWcs()
+            if measWcs is None:
+                raise lsst.meas.base.MeasurementError("No WCS in exposure")
+            transform = lsst.afw.image.XYTransformFromWcsPair(measWcs, refWcs)
+            transform = transform.linearizeForwardTransform(refCenter)
+        else:
+            transform = lsst.afw.geom.AffineTransform()
+
+        kron = self.getKronAperture(refRecord, transform)
+
+        center = refCenter if transform is None else transform(refCenter)
         seeing = psf.computeShape(center).getDeterminantRadius()
         measRecord.set(self.seeingKey, seeing)
 
-        maxRadius = self.getMaxRadius(measRecord)
+        maxRadius = self.getMaxRadius(kron)
         for ii, target in enumerate(self.config.seeing):
             try:
                 convolved = self.convolve(exposure, seeing, target/SIGMA_TO_FWHM, measRecord.getFootprint(),
@@ -306,8 +324,8 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
                 measRecord.set(self.data[ii].deconvKey, True)
                 continue
             self.measureAperture(measRecord, convolved, self.data[ii].aperture)
-            if self.haveKron:
-                self.measureForcedKron(measRecord, self.data[ii].kronKeys, convolved.getMaskedImage(), center)
+            if kron is not None:
+                self.measureForcedKron(measRecord, self.data[ii].kronKeys, convolved.getMaskedImage(), kron)
 
     def fail(self, measRecord, error=None):
         """Record failure
@@ -323,39 +341,35 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         """
         self.flagHandler.handleFailure(measRecord)
 
-    def getKronRadius(self, measRecord):
+    def getKronAperture(self, refRecord, transform):
         """Determine the Kron radius
 
         Because we need to know the size of the area beforehand (we don't want to convolve
         the entire image just for this source), we are not measuring an independent Kron
-        radius, but using the Kron radius that's already provided in the `measRecord` as
+        radius, but using the Kron radius that's already provided in the `refRecord` as
         `ConvolvedFluxConfig.kronRadiusName`.
 
         Parameters
         ----------
-        measRecord : `lsst.afw.table.SourceRecord`
-            Record for source to be measured.
+        refRecord : `lsst.afw.table.SourceRecord`
+            Record for source defining Kron aperture.
+        transform : `lsst.afw.geom.AffineTransform`
+            Transformation to apply to reference aperture.
 
         Returns
         -------
-        radius : `float`
-            Kron radius.
-
-        Raises
-        ------
-        `NoKronError`
-            If the Kron radius could not be found or is non-finite.
+        aperture : `lsst.meas.extensions.photometryKron.KronAperture`
+            Kron aperture.
         """
         try:
-            radius = measRecord.get(self.kronRadiusKey)
+            radius = refRecord.get(self.config.kronRadiusName)
         except:
-            # recast the exception to something we can expect
-            raise NoKronError("Unable to find Kron radius")
+            return None
         if not np.isfinite(radius):
-            raise NoKronError("Bad Kron radius")
-        return radius
+            return None
+        return KronAperture(refRecord, transform, radius)
 
-    def getMaxRadius(self, measRecord):
+    def getMaxRadius(self, kron):
         """Determine the maximum radius we care about
 
         Because we don't want to convolve the entire image just for this source,
@@ -364,18 +378,15 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
 
         Parameters
         ----------
-        measRecord : `lsst.afw.table.SourceRecord`
-            Record for source to measured.
+        kron : `lsst.meas.extensions.photometryKron.KronAperture` or `None`
+            Kron aperture, or `None` if unavailable.
 
         Returns
         -------
         maxRadius : `int`
             Maximum radius of interest.
         """
-        try:
-            kronRadius = self.getKronRadius(measRecord)
-        except NoKronError:
-            kronRadius = 0.0
+        kronRadius = kron.getAxes().getDeterminantRadius() if kron is not None else 0.0
         return int(max(max(self.config.aperture.radii), self.config.kronRadiusForFlux*kronRadius) + 0.5)
 
     def convolve(self, exposure, seeing, target, footprint, maxRadius):
@@ -406,7 +417,7 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
 
         Returns
         -------
-        convolved : `lsst.afw.image.Exposure`
+        convExp : `lsst.afw.image.Exposure`
             Sub-image containing the source, convolved to the target seeing.
 
         Raises
@@ -467,7 +478,7 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         except:
             aperturePhot.fail(measRecord)
 
-    def measureForcedKron(self, measRecord, keys, image, center):
+    def measureForcedKron(self, measRecord, keys, image, aperture):
         """Measure forced Kron
 
         Because we need to know the size of the area beforehand (we don't want to convolve
@@ -478,21 +489,18 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         ----------
         measRecord : `lsst.afw.table.SourceRecord`
             Record for source to be measured.
-        exposure : `lsst.afw.image.MaskedImage`
-            Image to be measured.
         keys : `lsst.pipe.base.Struct`
             Struct containing `result` (`lsst.meas.base.FluxResult`) and
             `flag` (`lsst.afw.table.Key_Flag`); provided by
             `ConvolvedFluxData.kronKeys`.
-        center : `lsst.afw.geom.Point2D`
-            Center for Kron aperture.
+        image : `lsst.afw.image.MaskedImage`
+            Image to be measured.
+        aperture : `lsst.meas.extensions.photometryKron.KronAperture`
+            Kron aperture to measure.
         """
         measRecord.set(keys.flag, True)  # failed unless we survive to switch this back
-        try:
-            radius = self.getKronRadius(measRecord)
-        except NoKronError:
+        if aperture is None:
             return  # We've already flagged it, so just bail
-        aperture = KronAperture(measRecord, lsst.afw.geom.AffineTransform(), radius)
         try:
             flux = aperture.measureFlux(image, self.config.kronRadiusForFlux, self.config.maxSincRadius)
         except:
@@ -500,3 +508,76 @@ class ConvolvedFluxPlugin(lsst.meas.base.SingleFramePlugin):
         measRecord.set(keys.result.getFlux(), flux[0])
         measRecord.set(keys.result.getFluxSigma(), flux[1])
         measRecord.setFlag(keys.flag, bool(np.any(~np.isfinite(flux))))
+
+
+def wrapPlugin(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvolvedFluxConfig,
+               name=PLUGIN_NAME, factory=BaseConvolvedFluxPlugin):
+    """Wrap plugin for use
+
+    A plugin has to inherit from a specific base class in order to be used
+    in a particular context (e.g., single frame vs forced measurement).
+
+    Parameters
+    ----------
+    Base : `type`
+        Base class to give the plugin.
+    PluginClass : `type`
+        Plugin class to wrap.
+    ConfigClass : `type`
+        Configuration class; should subclass `lsst.pex.config.Config`.
+    name : `str`
+        Name of plugin.
+    factory : callable
+        Callable to create an instance of the `PluginClass`.
+
+    Returns
+    -------
+    WrappedPlugin : `type`
+        The wrapped plugin class (subclass of `Base`).
+    WrappedConfig : `type`
+        The wrapped plugin configuration (subclass of `Base.ConfigClass`).
+    """
+    WrappedConfig = type("ConvolvedFlux" + Base.ConfigClass.__name__, (Base.ConfigClass, ConfigClass), {})
+    typeDict = dict(AlgClass=PluginClass, ConfigClass=WrappedConfig, factory=factory,
+                    getExecutionOrder=PluginClass.getExecutionOrder)
+    WrappedPlugin = type("ConvolvedFlux" + Base.__name__, (Base,), typeDict)
+    Base.registry.register(name, WrappedPlugin)
+    return WrappedPlugin, WrappedConfig
+
+def wrapPluginForced(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvolvedFluxConfig,
+                     name=PLUGIN_NAME, factory=BaseConvolvedFluxPlugin):
+    """Wrap plugin for use in forced measurement
+
+    A version of `wrapPlugin` that generates a `factory` suitable for
+    forced measurement. This is important because the required signature
+    for the factory in forced measurement includes a 'schemaMapper' instead
+    of a 'schema'.
+
+    Parameters
+    ----------
+    Base : `type`
+        Base class to give the plugin.
+    PluginClass : `type`
+        Plugin class to wrap.
+    ConfigClass : `type`
+        Configuration class; should subclass `lsst.pex.config.Config`.
+    name : `str`
+        Name of plugin.
+    factory : callable
+        Callable to create an instance of the `PluginClass`.
+
+    Returns
+    -------
+    WrappedPlugin : `type`
+        The wrapped plugin class (subclass of `Base`).
+    WrappedConfig : `type`
+        The wrapped plugin configuration (subclass of `Base.ConfigClass`).
+    """
+
+    def forcedPluginFactory(name, config, schemaMapper, metadata):
+        return factory(name, config, schemaMapper.editOutputSchema(), metadata)
+    return wrapPlugin(Base, PluginClass=PluginClass, ConfigClass=ConfigClass, name=name,
+                      factory=staticmethod(forcedPluginFactory))
+
+SingleFrameConvolvedFluxPlugin, SingleFrameConvolvedFluxConfig = wrapPlugin(WrappedSingleFramePlugin)
+ForcedConvolvedFluxPlugin, ForcedConvolvedFluxConfig = wrapPluginForced(WrappedForcedPlugin)
