@@ -26,7 +26,6 @@ import numpy as np
 from lsst.pex.config import Config, Field, ListField, ConfigField, makeConfigClass
 from lsst.pipe.base import Struct
 from lsst.meas.extensions.photometryKron import KronAperture, KronFluxPlugin
-from lsst.meas.base.flagDecorator import addFlagHandler
 from lsst.meas.base.wrappers import WrappedSingleFramePlugin, WrappedForcedPlugin
 
 import lsst.meas.base
@@ -208,7 +207,6 @@ class BaseConvolvedFluxConfig(Config):
         return self.getAllApertureResultNames(name=name) + self.getAllKronResultNames(name=name)
 
 
-@addFlagHandler(("flag", "error in running ConvolvedFluxPlugin"),)
 class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
     """Calculate aperture fluxes on images convolved to target seeing.
 
@@ -259,6 +257,9 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         self.data = [ConvolvedFluxData(self.config.getBaseNameForSeeing(seeing), schema, seeing,
                                        self.config, metadata) for seeing in self.config.seeing]
 
+        flagDefs = lsst.meas.base.FlagDefinitionList()
+        flagDefs.addFailureFlag("error in running ConvolvedFluxPlugin")
+        self.flagHandler = lsst.meas.base.FlagHandler.addFields(schema, name, flagDefs)
         # Trigger aperture corrections for all flux measurements
         for apName in self.config.getAllApertureResultNames(name):
             lsst.meas.base.addApCorrName(apName)
