@@ -118,6 +118,8 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         measConfig.plugins.names.add(algName)
         if not forced:
             measConfig.plugins.names.add("ext_photometryKron_KronFlux")
+        else:
+            measConfig.copyColumns = {"id": "objectId", "parent": "parentObjectId"}
         values = [ii/scale.asArcseconds() for ii in (0.6, 0.8, 1.0, 1.2)]
         algConfig = measConfig.plugins[algName]
         algConfig.seeing = values
