@@ -89,7 +89,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
 
     def check(self, psfFwhm=0.5, flux=1000.0, forced=False):
         """Check that we can measure convolved fluxes
-    
+
         We create an image with a Gaussian PSF and a single point source.
         Measurements of the point source should match expectations for a
         Gaussian of the known sigma and known aperture radius.
