@@ -214,14 +214,15 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             if not forced:
                 kronName = algConfig.getKronResultName(targetSeeing)
                 kronApRadius = algConfig.kronRadiusForFlux*kronRadius
-                self.assertClose(source.get(kronName + "_flux"), expected(kronApRadius), rtol=1.0e-3)
+                self.assertFloatsAlmostEqual(source.get(kronName + "_flux"),
+                                             expected(kronApRadius), rtol=1.0e-3)
                 self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
                 self.assertFalse(source.get(kronName + "_flag"))
 
             # Aperture measurements suceeded and match expectation
             for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
                 name = algConfig.getApertureResultName(targetSeeing, radius)
-                self.assertClose(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
+                self.assertFloatsAlmostEqual(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
                 self.assertFalse(source.get(name + "_flag"))
                 self.assertGreater(source.get(name + "_fluxSigma"), 0)
 
