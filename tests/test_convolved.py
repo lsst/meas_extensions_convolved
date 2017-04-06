@@ -1,4 +1,25 @@
-from __future__ import print_function, division
+#
+# LSST Data Management System
+# Copyright 2017 LSST/AURA.
+#
+# This product includes software developed by the
+# LSST Project (http://www.lsst.org/).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the LSST License Statement and
+# the GNU General Public License along with this program.  If not,
+# see <http://www.lsstcorp.org/LegalNotices/>.
+#
+from __future__ import absolute_import, division, print_function
 
 import math
 import unittest
@@ -89,7 +110,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
 
     def check(self, psfFwhm=0.5, flux=1000.0, forced=False):
         """Check that we can measure convolved fluxes
-    
+
         We create an image with a Gaussian PSF and a single point source.
         Measurements of the point source should match expectations for a
         Gaussian of the known sigma and known aperture radius.
@@ -193,14 +214,15 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             if not forced:
                 kronName = algConfig.getKronResultName(targetSeeing)
                 kronApRadius = algConfig.kronRadiusForFlux*kronRadius
-                self.assertClose(source.get(kronName + "_flux"), expected(kronApRadius), rtol=1.0e-3)
+                self.assertFloatsAlmostEqual(source.get(kronName + "_flux"),
+                                             expected(kronApRadius), rtol=1.0e-3)
                 self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
                 self.assertFalse(source.get(kronName + "_flag"))
 
             # Aperture measurements suceeded and match expectation
             for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
                 name = algConfig.getApertureResultName(targetSeeing, radius)
-                self.assertClose(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
+                self.assertFloatsAlmostEqual(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
                 self.assertFalse(source.get(name + "_flag"))
                 self.assertGreater(source.get(name + "_fluxSigma"), 0)
 
