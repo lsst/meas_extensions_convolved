@@ -85,8 +85,10 @@ def makeExposure(bbox, scale, psfFwhm, flux):
     exp.getMaskedImage().getVariance().set(1.0)
     exp.getMaskedImage().getMask().set(0)
 
-    exp.setWcs(afwImage.makeWcs(afwCoord.Coord(0.0*afwGeom.degrees, 0.0*afwGeom.degrees),
-                                center, scale.asDegrees(), 0.0, 0.0, scale.asDegrees()))
+    cdMatrix = afwGeom.makeCdMatrix(scale=scale)
+    exp.setWcs(afwGeom.makeSkyWcs(crpix=center,
+                                  crval=afwCoord.IcrsCoord(0.0*afwGeom.degrees, 0.0*afwGeom.degrees),
+                                  cdMatrix=cdMatrix))
     return exp, center
 
 
@@ -151,8 +153,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             offset = lsst.afw.geom.Extent2D(-12.3, 45.6)
             kronRadiusName = "my_Kron_Radius"
             kronRadius = 12.345
-            refWcs = exposure.getWcs().clone()
-            refWcs.shiftReferencePixel(offset)
+            refWcs = exposure.getWcs().copyAtShiftedPixelOrigin(offset)
             measConfig.plugins[algName].kronRadiusName = kronRadiusName
             refSchema = afwTable.SourceTable.makeMinimalSchema()
             centroidKey = afwTable.Point2DKey.addFields(refSchema, "my_centroid", doc="centroid",
