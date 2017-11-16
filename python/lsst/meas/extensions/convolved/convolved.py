@@ -546,6 +546,7 @@ def wrapPlugin(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvol
     Base.registry.register(name, WrappedPlugin)
     return WrappedPlugin, WrappedConfig
 
+
 def wrapPluginForced(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvolvedFluxConfig,
                      name=PLUGIN_NAME, factory=BaseConvolvedFluxPlugin):
     """Wrap plugin for use in forced measurement
@@ -580,6 +581,7 @@ def wrapPluginForced(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=Base
         return factory(name, config, schemaMapper.editOutputSchema(), metadata)
     return wrapPlugin(Base, PluginClass=PluginClass, ConfigClass=ConfigClass, name=name,
                       factory=staticmethod(forcedPluginFactory))
+
 
 SingleFrameConvolvedFluxPlugin, SingleFrameConvolvedFluxConfig = wrapPlugin(WrappedSingleFramePlugin)
 ForcedConvolvedFluxPlugin, ForcedConvolvedFluxConfig = wrapPluginForced(WrappedForcedPlugin)
