@@ -32,6 +32,7 @@ import lsst.meas.base
 import lsst.afw.math
 import lsst.afw.geom
 import lsst.afw.image
+from lsst.afw.geom.skyWcs import makeWcsPairTransform
 
 __all__ = ("SingleFrameConvolvedFluxPlugin", "SingleFrameConvolvedFluxConfig",
            "ForcedConvolvedFluxPlugin", "ForcedConvolvedFluxConfig",)
@@ -291,7 +292,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             Image to be measured.
         refRecord : `lsst.afw.table.SourceRecord`
             Record providing reference position and aperture.
-        refWcs : `lsst.afw.image.Wcs` or `None`
+        refWcs : `lsst.afw.geom.skyWcs.SkyWcs` or `None`
             Astrometric solution for reference, or `None` for no conversion
             from reference to measurement frame.
         """
@@ -305,8 +306,8 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             measWcs = exposure.getWcs()
             if measWcs is None:
                 raise lsst.meas.base.MeasurementError("No WCS in exposure")
-            transform = lsst.afw.image.XYTransformFromWcsPair(measWcs, refWcs)
-            transform = transform.linearizeForwardTransform(refCenter)
+            fullTransform = makeWcsPairTransform(refWcs, measWcs)
+            transform = lsst.afw.geom.linearizeTransform(fullTransform, refCenter)
         else:
             transform = lsst.afw.geom.AffineTransform()
 
@@ -546,6 +547,7 @@ def wrapPlugin(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvol
     Base.registry.register(name, WrappedPlugin)
     return WrappedPlugin, WrappedConfig
 
+
 def wrapPluginForced(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=BaseConvolvedFluxConfig,
                      name=PLUGIN_NAME, factory=BaseConvolvedFluxPlugin):
     """Wrap plugin for use in forced measurement
@@ -580,6 +582,7 @@ def wrapPluginForced(Base, PluginClass=BaseConvolvedFluxPlugin, ConfigClass=Base
         return factory(name, config, schemaMapper.editOutputSchema(), metadata)
     return wrapPlugin(Base, PluginClass=PluginClass, ConfigClass=ConfigClass, name=name,
                       factory=staticmethod(forcedPluginFactory))
+
 
 SingleFrameConvolvedFluxPlugin, SingleFrameConvolvedFluxConfig = wrapPlugin(WrappedSingleFramePlugin)
 ForcedConvolvedFluxPlugin, ForcedConvolvedFluxConfig = wrapPluginForced(WrappedForcedPlugin)
