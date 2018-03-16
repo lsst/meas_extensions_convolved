@@ -29,7 +29,6 @@ import lsst.afw.detection as afwDetection
 import lsst.afw.geom as afwGeom
 import lsst.afw.geom.ellipses as afwEll
 import lsst.afw.table as afwTable
-import lsst.afw.coord as afwCoord
 import lsst.afw.image as afwImage
 import lsst.meas.base as measBase
 import lsst.meas.extensions.convolved  # Load flux.convolved algorithm
@@ -87,7 +86,7 @@ def makeExposure(bbox, scale, psfFwhm, flux):
 
     cdMatrix = afwGeom.makeCdMatrix(scale=scale)
     exp.setWcs(afwGeom.makeSkyWcs(crpix=center,
-                                  crval=afwCoord.IcrsCoord(0.0*afwGeom.degrees, 0.0*afwGeom.degrees),
+                                  crval=afwGeom.SpherePoint(0.0, 0.0, afwGeom.degrees),
                                   cdMatrix=cdMatrix))
     return exp, center
 
