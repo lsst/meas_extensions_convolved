@@ -255,7 +255,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         self.seeingKey = schema.addField(name + "_seeing", type="F",
                                          doc="original seeing (Gaussian sigma) at position",
                                          units="pixel")
-        self.data = [ConvolvedFluxData(self.config.getBaseNameForSeeing(seeing), schema, seeing,
+        self.data = [ConvolvedFluxData(self.config.getBaseNameForSeeing(seeing, name=name), schema, seeing,
                                        self.config, metadata) for seeing in self.config.seeing]
 
         flagDefs = lsst.meas.base.FlagDefinitionList()
