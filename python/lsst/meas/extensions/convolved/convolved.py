@@ -75,8 +75,8 @@ class ConvolvedFluxData(Struct):
         kronKeys = Struct(
             result=lsst.meas.base.FluxResultKey.addFields(schema, name + "_kron",
                                                           doc="convolved Kron flux: seeing %f" % (seeing,)),
-            flag = schema.addField(name + "_kron_flag", type="Flag",
-                                   doc="convolved Kron flux failed: seeing %f" % (seeing,)),
+            flag=schema.addField(name + "_kron_flag", type="Flag",
+                                 doc="convolved Kron flux failed: seeing %f" % (seeing,)),
         )
         Struct.__init__(self, deconvKey=deconvKey, aperture=aperture, kronKeys=kronKeys)
 
@@ -366,7 +366,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         """
         try:
             radius = refRecord.get(self.config.kronRadiusName)
-        except:
+        except KeyError:
             return None
         if not np.isfinite(radius):
             return None
@@ -478,7 +478,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         """
         try:
             aperturePhot.measure(measRecord, exposure)
-        except:
+        except Exception:
             aperturePhot.fail(measRecord)
 
     def measureForcedKron(self, measRecord, keys, image, aperture):
@@ -506,7 +506,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             return  # We've already flagged it, so just bail
         try:
             flux = aperture.measureFlux(image, self.config.kronRadiusForFlux, self.config.maxSincRadius)
-        except:
+        except Exception:
             return  # We've already flagged it, so just bail
         measRecord.set(keys.result.getFlux(), flux[0])
         measRecord.set(keys.result.getFluxSigma(), flux[1])
