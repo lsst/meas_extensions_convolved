@@ -93,6 +93,13 @@ class BaseConvolvedFluxConfig(Config):
     maxSincRadius = Field(dtype=float, default=10.0,
                           doc="Largest aperture for which to use the sinc aperture code for Kron (pixels)")
     kronRadiusForFlux = Field(dtype=float, default=2.5, doc="Number of Kron radii for Kron flux")
+    registerForApCorr = Field(dtype=bool, default=True,
+                              doc="Register measurements for aperture correction?\n"
+                                  "The aperture correction registration is done when the plugin is\n"
+                                  "instantiated because the column names are derived from the configuration\n"
+                                  "rather than being static. Sometimes you want to turn this off, e.g.,\n"
+                                  "when you will use aperture corrections derived from somewhere else\n"
+                                  "through the 'proxy' mechanism.")
 
     def setDefaults(self):
         Config.setDefaults(self)
@@ -261,11 +268,12 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         flagDefs = lsst.meas.base.FlagDefinitionList()
         flagDefs.addFailureFlag("error in running ConvolvedFluxPlugin")
         self.flagHandler = lsst.meas.base.FlagHandler.addFields(schema, name, flagDefs)
-        # Trigger aperture corrections for all flux measurements
-        for apName in self.config.getAllApertureResultNames(name):
-            lsst.meas.base.addApCorrName(apName)
-        for kronName in self.config.getAllKronResultNames(name):
-            lsst.meas.base.addApCorrName(kronName)
+        if self.config.registerForApCorr:
+            # Trigger aperture corrections for all flux measurements
+            for apName in self.config.getAllApertureResultNames(name):
+                lsst.meas.base.addApCorrName(apName)
+            for kronName in self.config.getAllKronResultNames(name):
+                lsst.meas.base.addApCorrName(kronName)
 
         self.centroidExtractor = lsst.meas.base.SafeCentroidExtractor(schema, name)
 
