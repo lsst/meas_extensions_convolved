@@ -97,6 +97,8 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
     def checkSchema(self, schema, names):
         """Check that the schema includes flux, fluxSigma and flag elements for each measurement
 
+        Also checks for the presence of the corresponding undeblended measurements.
+
         Parameters
         ----------
         schema : `lsst.afw.table.Schema`
@@ -108,6 +110,9 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             self.assertIn(name + "_flux", schema)
             self.assertIn(name + "_fluxSigma", schema)
             self.assertIn(name + "_flag", schema)
+            self.assertIn("undeblended_" + name + "_flux", schema)
+            self.assertIn("undeblended_" + name + "_fluxSigma", schema)
+            self.assertIn("undeblended_" + name + "_flag", schema)
 
     def check(self, psfFwhm=0.5, flux=1000.0, forced=False):
         """Check that we can measure convolved fluxes
@@ -175,6 +180,10 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
             taskInitArgs = (afwTable.SourceTable.makeMinimalSchema(),)
             taskRunArgs = ()
 
+        # Activate undeblended measurement with the same configuration
+        measConfig.undeblended.names.add(algName)
+        measConfig.undeblended[algName] = measConfig.plugins[algName]
+
         algMetadata = dafBase.PropertyList()
         task = TaskClass(*taskInitArgs, config=measConfig, algMetadata=algMetadata)
 
@@ -203,28 +212,31 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         originalSeeing = psfFwhm/scale.asArcseconds()
         for ii, targetSeeing in enumerate(algConfig.seeing):
             deconvolve = targetSeeing < originalSeeing
-            self.assertEqual(source.get(algName + "_%d_deconv" % ii), deconvolve)
             seeing = originalSeeing if deconvolve else targetSeeing
 
             def expected(radius, sigma=seeing/SIGMA_TO_FWHM):
                 """Return expected flux for 2D Gaussian with nominated sigma"""
                 return flux*(1.0 - math.exp(-0.5*(radius/sigma)**2))
 
-            # Kron succeeded and match expectation
-            if not forced:
-                kronName = algConfig.getKronResultName(targetSeeing)
-                kronApRadius = algConfig.kronRadiusForFlux*kronRadius
-                self.assertFloatsAlmostEqual(source.get(kronName + "_flux"),
-                                             expected(kronApRadius), rtol=1.0e-3)
-                self.assertGreater(source.get(kronName + "_fluxSigma"), 0)
-                self.assertFalse(source.get(kronName + "_flag"))
+            for prefix in ("", "undeblended_"):
+                self.assertEqual(source.get(prefix + algName + "_%d_deconv" % ii), deconvolve)
 
-            # Aperture measurements suceeded and match expectation
-            for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
-                name = algConfig.getApertureResultName(targetSeeing, radius)
-                self.assertFloatsAlmostEqual(source.get(name + "_flux"), expected(radius), rtol=1.0e-3)
-                self.assertFalse(source.get(name + "_flag"))
-                self.assertGreater(source.get(name + "_fluxSigma"), 0)
+                # Kron succeeded and match expectation
+                if not forced:
+                    kronName = algConfig.getKronResultName(targetSeeing)
+                    kronApRadius = algConfig.kronRadiusForFlux*kronRadius
+                    self.assertFloatsAlmostEqual(source.get(prefix + kronName + "_flux"),
+                                                 expected(kronApRadius), rtol=1.0e-3)
+                    self.assertGreater(source.get(prefix + kronName + "_fluxSigma"), 0)
+                    self.assertFalse(source.get(prefix + kronName + "_flag"))
+
+                # Aperture measurements succeeded and match expectation
+                for jj, radius in enumerate(measConfig.algorithms[algName].aperture.radii):
+                    name = algConfig.getApertureResultName(targetSeeing, radius)
+                    self.assertFloatsAlmostEqual(source.get(prefix + name + "_flux"), expected(radius),
+                                                 rtol=1.0e-3)
+                    self.assertFalse(source.get(prefix + name + "_flag"))
+                    self.assertGreater(source.get(prefix + name + "_fluxSigma"), 0)
 
     def testConvolvedFlux(self):
         for forced in (True, False):
@@ -243,7 +255,7 @@ def setup_module(module, backend="virtualDevice"):
     lsst.utils.tests.init()
     try:
         afwDisplay.setDefaultBackend(backend)
-    except:
+    except Exception:
         print("Unable to configure display backend: %s" % backend)
 
 
