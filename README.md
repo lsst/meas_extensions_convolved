@@ -32,10 +32,10 @@ The aperture measurements that are made are:
 * `<algName>_seeing`: PSF determinant radius at source position, in pixels.
 * `<algName>_<seeingIndex>_deconv`: deconvolution flag; if `True`, the PSF at the position is wider than the target seeing, so PSF matching would require deconvolution. No aperture measurements will have been made with this target seeing.
 * `<algName>_<seeingIndex>_<aperName>_flux`: flux within circular aperture after convolution to target seeing.
-* `<algName>_<seeingIndex>_<aperName>_fluxSigma`: estimated error for circular aperture flux measurement after convolution to target seeing. See [this note](#errors) for a warning about their reliability.
+* `<algName>_<seeingIndex>_<aperName>_fluxErr`: estimated error for circular aperture flux measurement after convolution to target seeing. See [this note](#errors) for a warning about their reliability.
 * `<algName>_<seeingIndex>_<aperName>_flag`: aperture flux flag; if `True`, the corresponding aperture flux measurement is unreliable. This may be set, e.g., if the aperture extends off the edge of the image.
 * `<algName>_<seeingIndex>_kron_flux`: flux within Kron aperture after convolution to target seeing.
-* `<algName>_<seeingIndex>_kron_fluxSigma`: estimated error for Kron flux measurement after convolution to target seeing. See [this note](#errors) for a warning about their reliability.
+* `<algName>_<seeingIndex>_kron_fluxErr`: estimated error for Kron flux measurement after convolution to target seeing. See [this note](#errors) for a warning about their reliability.
 * `<algName>_<seeingIndex>_kron_flag`: Kron flux flag; if `True`, the Kron flux measurement is unreliable. This may be set, e.g., if the Kron aperture extends off the edge of the image.
 
 In the above list of output columns:

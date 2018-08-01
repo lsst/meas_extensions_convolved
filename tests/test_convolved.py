@@ -95,7 +95,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
     """A test case for measuring convolved fluxes"""
 
     def checkSchema(self, schema, names):
-        """Check that the schema includes flux, fluxSigma and flag elements for each measurement
+        """Check that the schema includes flux, fluxErr and flag elements for each measurement
 
         Also checks for the presence of the corresponding undeblended measurements.
 
@@ -108,10 +108,10 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         """
         for name in names:
             self.assertIn(name + "_flux", schema)
-            self.assertIn(name + "_fluxSigma", schema)
+            self.assertIn(name + "_fluxErr", schema)
             self.assertIn(name + "_flag", schema)
             self.assertIn("undeblended_" + name + "_flux", schema)
-            self.assertIn("undeblended_" + name + "_fluxSigma", schema)
+            self.assertIn("undeblended_" + name + "_fluxErr", schema)
             self.assertIn("undeblended_" + name + "_flag", schema)
 
     def check(self, psfFwhm=0.5, flux=1000.0, forced=False):
@@ -227,7 +227,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
                     kronApRadius = algConfig.kronRadiusForFlux*kronRadius
                     self.assertFloatsAlmostEqual(source.get(prefix + kronName + "_flux"),
                                                  expected(kronApRadius), rtol=1.0e-3)
-                    self.assertGreater(source.get(prefix + kronName + "_fluxSigma"), 0)
+                    self.assertGreater(source.get(prefix + kronName + "_fluxErr"), 0)
                     self.assertFalse(source.get(prefix + kronName + "_flag"))
 
                 # Aperture measurements succeeded and match expectation
@@ -236,7 +236,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
                     self.assertFloatsAlmostEqual(source.get(prefix + name + "_flux"), expected(radius),
                                                  rtol=1.0e-3)
                     self.assertFalse(source.get(prefix + name + "_flag"))
-                    self.assertGreater(source.get(prefix + name + "_fluxSigma"), 0)
+                    self.assertGreater(source.get(prefix + name + "_fluxErr"), 0)
 
     def testConvolvedFlux(self):
         for forced in (True, False):
