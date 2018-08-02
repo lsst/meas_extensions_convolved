@@ -130,7 +130,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         forced : `bool`
             Forced measurement?
         """
-        bbox = afwGeom.Box2I(afwGeom.Point2I(12345, 6789), afwGeom.Extent2I(200, 300))
+        bbox = afwGeom.Box2I(afwGeom.Point2I(12345, 6789), afwGeom.Extent2I(200, 300), invert=False)
 
         # We'll only achieve the target accuracy if the pixel scale is rather smaller than Gaussians
         # involved. Otherwise it's important to consider the convolution with the pixel grid, and we're
