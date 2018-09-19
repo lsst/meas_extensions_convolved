@@ -516,8 +516,8 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             flux = aperture.measureFlux(image, self.config.kronRadiusForFlux, self.config.maxSincRadius)
         except Exception:
             return  # We've already flagged it, so just bail
-        measRecord.set(keys.result.getFlux(), flux[0])
-        measRecord.set(keys.result.getFluxErr(), flux[1])
+        measRecord.set(keys.result.getInstFlux(), flux[0])
+        measRecord.set(keys.result.getInstFluxErr(), flux[1])
         measRecord.setFlag(keys.flag, bool(np.any(~np.isfinite(flux))))
 
 
