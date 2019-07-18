@@ -30,6 +30,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.geom.ellipses as afwEll
 import lsst.afw.table as afwTable
 import lsst.afw.image as afwImage
+import lsst.geom as geom
 import lsst.meas.base as measBase
 import lsst.meas.extensions.convolved  # Load flux.convolved algorithm
 
@@ -50,9 +51,9 @@ def makeExposure(bbox, scale, psfFwhm, flux):
     Parameters
     ----------
 
-    bbox : `lsst.afw.geom.Box2I`
+    bbox : `lsst.geom.Box2I`
         Bounding box for image.
-    scale : `lsst.afw.geom.Angle`
+    scale : `lsst.geom.Angle`
         Pixel scale.
     psfFwhm : `float`
         PSF FWHM (arcseconds)
@@ -63,12 +64,12 @@ def makeExposure(bbox, scale, psfFwhm, flux):
     -------
     exposure : `lsst.afw.image.ExposureF`
         Fake exposure.
-    center : `lsst.afw.geom.Point2D`
+    center : `lsst.geom.Point2D`
         Position of fake source.
     """
     image = afwImage.ImageF(bbox)
     image.set(0)
-    center = afwGeom.Box2D(bbox).getCenter()
+    center = geom.Box2D(bbox).getCenter()
     psfSigma = psfFwhm/SIGMA_TO_FWHM/scale.asArcseconds()
     psfWidth = 2*int(4.0*psfSigma) + 1
     psf = afwDetection.GaussianPsf(psfWidth, psfWidth, psfSigma)
@@ -86,7 +87,7 @@ def makeExposure(bbox, scale, psfFwhm, flux):
 
     cdMatrix = afwGeom.makeCdMatrix(scale=scale)
     exp.setWcs(afwGeom.makeSkyWcs(crpix=center,
-                                  crval=afwGeom.SpherePoint(0.0, 0.0, afwGeom.degrees),
+                                  crval=geom.SpherePoint(0.0, 0.0, geom.degrees),
                                   cdMatrix=cdMatrix))
     return exp, center
 
@@ -130,12 +131,12 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         forced : `bool`
             Forced measurement?
         """
-        bbox = afwGeom.Box2I(afwGeom.Point2I(12345, 6789), afwGeom.Extent2I(200, 300))
+        bbox = geom.Box2I(geom.Point2I(12345, 6789), geom.Extent2I(200, 300))
 
         # We'll only achieve the target accuracy if the pixel scale is rather smaller than Gaussians
         # involved. Otherwise it's important to consider the convolution with the pixel grid, and we're
         # not doing that here.
-        scale = 0.1*afwGeom.arcseconds
+        scale = 0.1*geom.arcseconds
 
         TaskClass = measBase.ForcedMeasurementTask if forced else measBase.SingleFrameMeasurementTask
 
@@ -154,7 +155,7 @@ class ConvolvedFluxTestCase(lsst.utils.tests.TestCase):
         algConfig.aperture.maxSincRadius = max(values) + 1  # Get as exact as we can
 
         if forced:
-            offset = lsst.afw.geom.Extent2D(-12.3, 45.6)
+            offset = geom.Extent2D(-12.3, 45.6)
             kronRadiusName = "my_Kron_Radius"
             kronRadius = 12.345
             refWcs = exposure.getWcs().copyAtShiftedPixelOrigin(offset)
