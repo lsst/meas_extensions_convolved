@@ -30,8 +30,8 @@ from lsst.meas.base.wrappers import WrappedSingleFramePlugin, WrappedForcedPlugi
 
 import lsst.meas.base
 import lsst.afw.math
-import lsst.afw.geom
 import lsst.afw.image
+import lsst.geom
 from lsst.afw.geom.skyWcs import makeWcsPairTransform
 
 __all__ = ("SingleFrameConvolvedFluxPlugin", "SingleFrameConvolvedFluxConfig",
@@ -300,7 +300,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             Image to be measured.
         refRecord : `lsst.afw.table.SourceRecord`
             Record providing reference position and aperture.
-        refWcs : `lsst.afw.geom.skyWcs.SkyWcs` or `None`
+        refWcs : `lsst.afw.geom.SkyWcs` or `None`
             Astrometric solution for reference, or `None` for no conversion
             from reference to measurement frame.
         """
@@ -317,7 +317,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
             fullTransform = makeWcsPairTransform(refWcs, measWcs)
             transform = lsst.afw.geom.linearizeTransform(fullTransform, refCenter)
         else:
-            transform = lsst.afw.geom.AffineTransform()
+            transform = lsst.geom.AffineTransform()
 
         kron = self.getKronAperture(refRecord, transform)
 
@@ -364,7 +364,7 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         ----------
         refRecord : `lsst.afw.table.SourceRecord`
             Record for source defining Kron aperture.
-        transform : `lsst.afw.geom.AffineTransform`
+        transform : `lsst.geom.AffineTransform`
             Transformation to apply to reference aperture.
 
         Returns
