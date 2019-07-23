@@ -458,17 +458,8 @@ class BaseConvolvedFluxPlugin(lsst.meas.base.BaseMeasurementPlugin):
         convolved = image.Factory(bbox)
         lsst.afw.math.convolve(convolved, subImage, kernel, lsst.afw.math.ConvolutionControl(True, True))
 
-        # This is ugly, but necessary; should be resolved following RFC-217, DM-5503
         convExp = lsst.afw.image.makeExposure(convolved)
-        convInfo = convExp.getInfo()
-        origInfo = exposure.getInfo()
-        for method in dir(origInfo):
-            if not method.startswith("get"):
-                continue
-            setter = "s" + method[1:]
-            if not hasattr(convInfo, setter):
-                continue
-            getattr(convInfo, setter)(getattr(origInfo, method)())
+        convExp.setInfo(lsst.afw.image.ExposureInfo(exposure.getInfo()))
 
         return convExp
 
