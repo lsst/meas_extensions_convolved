@@ -16,3 +16,4 @@ python/lsst/meas/extensions/convolved/version.py
 .cache
 .pytest_cache
 .coverage
+python/*.dist-info/
